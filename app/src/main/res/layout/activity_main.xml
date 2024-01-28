@@ -6,11 +6,27 @@
     tools:context=".MainActivity">
 
     <Button
-        android:id="@+id/captureButton"
+        android:id="@+id/startVoiceButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Capture Photos"
-        android:layout_centerInParent="true"
-        android:padding="16dp" />
+        android:text="Start Voice Recognition"
+        android:layout_centerInParent="true"/>
 
+    <TextView
+        android:id="@+id/resultTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/startVoiceButton"
+        android:layout_marginTop="16dp"
+        android:text="Result will appear here"
+        android:layout_centerHorizontal="true"/>
+
+    <TextView
+        android:id="@+id/helpStatusTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/resultTextView"
+        android:layout_marginTop="16dp"
+        android:text=""
+        android:layout_centerHorizontal="true"/>
 </RelativeLayout>
