@@ -1,259 +1,136 @@
 package com.example.testing
 
-import android.Manifest
-import android.content.ContentValues
-import android.content.Context
-import android.content.pm.PackageManager
-import android.graphics.ImageFormat
-import android.graphics.SurfaceTexture
-import android.hardware.camera2.*
-import android.hardware.camera2.params.StreamConfigurationMap
-import android.media.Image
-import android.media.ImageReader
-import android.net.Uri
+import android.app.Activity
+import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
-import android.os.Environment
-import android.os.Handler
-import android.os.HandlerThread
-import android.provider.MediaStore
+import android.provider.ContactsContract
 import android.util.Log
-import android.util.Size
-import android.view.Surface
 import android.widget.Button
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var captureButton: Button
-    private lateinit var cameraManager: CameraManager
-    private var cameraDevice: CameraDevice? = null
-    private lateinit var backgroundHandler: Handler
-    private lateinit var backgroundThread: HandlerThread
-    private lateinit var imageReader: ImageReader
-    private lateinit var frontCameraId: String
-    private lateinit var backCameraId: String
-    private var currentCameraId: String? = null
-    private var photosTaken = 0
-    private val NUM_FRAMES_FOR_CONVERGENCE = 30
-    private lateinit var mDummyPreview: SurfaceTexture
-    private lateinit var mDummySurface: Surface
+    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var selectedContactNameTextView: TextView
+    private lateinit var selectedContactNumberTextView: TextView
+
+    companion object {
+        const val PICK_CONTACT_REQUEST = 1
+        const val PREFS_KEY_SELECTED_CONTACT_NAME = "selected_contact_name"
+        const val PREFS_KEY_SELECTED_CONTACT_NUMBER = "selected_contact_number"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Get reference to the Button using findViewById
-        captureButton = findViewById(R.id.captureButton)
-        mDummyPreview = SurfaceTexture(1)
-        mDummySurface = Surface(mDummyPreview)
+        sharedPreferences = getPreferences(MODE_PRIVATE)
+        selectedContactNameTextView = findViewById(R.id.selectedContactNameTextView)
+        selectedContactNumberTextView = findViewById(R.id.selectedContactNumberTextView)
 
-        // Set up a click listener for the button
-        captureButton.setOnClickListener {
-            getCameraIds()
-            photosTaken = 0
-            takePhotos()
-        }
+        val selectContactButton: Button = findViewById(R.id.selectContactButton)
+        selectContactButton.setOnClickListener { pickContact() }
 
-        // Initialize CameraManager
-        cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-
-        // Set up background thread and handler
-        backgroundThread = HandlerThread("CameraBackground").apply {
-            start()
-            backgroundHandler = Handler(looper)
-        }
-
-        // Set up ImageReader
-        imageReader = ImageReader.newInstance(1920, 1080, ImageFormat.JPEG, 2)
-        imageReader.setOnImageAvailableListener({ reader ->
-            val image = reader.acquireLatestImage()
-            // Process the captured image here
-            saveImageToGallery(image)
-            image?.close()
-        }, backgroundHandler)
+        // Load the selected contact from SharedPreferences and display it
+        loadSelectedContact()
     }
 
-    // Retrieve camera IDs for front and back cameras
-    private fun getCameraIds() {
-        val cameraIds = cameraManager.cameraIdList
-        for (id in cameraIds) {
-            val characteristics = cameraManager.getCameraCharacteristics(id)
-            val lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING)
-            if (lensFacing == CameraCharacteristics.LENS_FACING_FRONT) {
-                frontCameraId = id
-            } else if (lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
-                backCameraId = id
-            }
-        }
+    private fun pickContact() {
+        val pickContactIntent = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+        startActivityForResult(pickContactIntent, PICK_CONTACT_REQUEST)
     }
 
-    // Initiate the process of taking photos
-    private fun takePhotos() {
-        if (photosTaken >= 2) {
-            // Limit to 2 photos (front and back)
-            return
+    private fun saveSelectedContact(name: String, number: String) {
+        // Save the selected contact name and number to SharedPreferences
+        sharedPreferences.edit().apply {
+            putString(PREFS_KEY_SELECTED_CONTACT_NAME, name)
+            putString(PREFS_KEY_SELECTED_CONTACT_NUMBER, number)
+            apply()
         }
 
-        if (photosTaken == 0) {
-            currentCameraId = backCameraId
-        } else {
-            currentCameraId = frontCameraId
-        }
+        // Display the saved contact in the TextViews
+        selectedContactNameTextView.text = name
+        selectedContactNumberTextView.text = number
+    }
 
-        try {
-            // Check camera permission
-            if (ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.CAMERA
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return
-            }
-            cameraManager.openCamera(currentCameraId!!, stateCallback, backgroundHandler)
-        } catch (e: CameraAccessException) {
-            Log.e("CameraCapture", "Error accessing camera: ${e.message}")
+    private fun loadSelectedContact() {
+        // Load the selected contact name and number from SharedPreferences
+        val selectedContactName = sharedPreferences.getString(PREFS_KEY_SELECTED_CONTACT_NAME, "")
+        val selectedContactNumber = sharedPreferences.getString(PREFS_KEY_SELECTED_CONTACT_NUMBER, "")
+
+        // Display the selected contact name and number in the TextViews
+        selectedContactNameTextView.text = selectedContactName
+        selectedContactNumberTextView.text = selectedContactNumber
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == PICK_CONTACT_REQUEST && resultCode == Activity.RESULT_OK) {
+            handleSelectedContact(data?.data)
         }
     }
 
-    // Callback for camera device state changes
-    private val stateCallback = object : CameraDevice.StateCallback() {
-        override fun onOpened(camera: CameraDevice) {
-            cameraDevice = camera
-            createCaptureSession()
-        }
+    private fun handleSelectedContact(contactUri: android.net.Uri?) {
+        val cursor = contentResolver.query(contactUri!!, null, null, null, null)
 
-        override fun onDisconnected(camera: CameraDevice) {
-            cameraDevice?.close()
-        }
+        cursor?.use {
+            if (it.moveToFirst()) {
+                // Retrieve the contact name column index
+                val nameIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
 
-        override fun onError(camera: CameraDevice, error: Int) {
-            cameraDevice?.close()
-        }
-    }
+                if (nameIndex != -1) {
+                    // Retrieve the contact name from the cursor
+                    val contactName = it.getString(nameIndex)
 
-    // Create a capture session with necessary surfaces
-    private fun createCaptureSession() {
-        try {
-            val surfaces = mutableListOf<Surface>()
-            surfaces.add(imageReader.surface)
-            surfaces.add(mDummySurface) // Add the dummy surface
+                    // Log the retrieved name
+                    Log.d("MainActivity", "Contact Name: $contactName")
 
-            cameraDevice?.createCaptureSession(surfaces, captureSessionCallback, backgroundHandler)
-        } catch (e: CameraAccessException) {
-            Log.e("CameraCapture", "Error creating capture session: ${e.message}")
-        }
-    }
+                    // Check if the contact has a valid _ID
+                    val idIndex = it.getColumnIndex(ContactsContract.Contacts._ID)
+                    if (idIndex != -1) {
+                        // Query phone numbers associated with the contact
+                        val contactId = it.getString(idIndex)
+                        val phoneCursor = contentResolver.query(
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                            null,
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ? AND " +
+                                    ContactsContract.CommonDataKinds.Phone.NUMBER + " IS NOT NULL",
+                            arrayOf(contactId),
+                            null
+                        )
 
-    // Callback for capture session state changes
-    private val captureSessionCallback = object : CameraCaptureSession.StateCallback() {
-        override fun onConfigured(session: CameraCaptureSession) {
-            try {
-                // Create a repeating request targeting the dummy preview
-                val previewRequestBuilder =
-                    cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-                previewRequestBuilder?.addTarget(mDummySurface)
-                previewRequestBuilder?.build()
-                    ?.let { session.setRepeatingRequest(it, null, backgroundHandler) }
+                        phoneCursor?.use { phoneCursor ->
+                            if (phoneCursor.moveToFirst()) {
+                                // Retrieve the contact phone number column index
+                                val numberIndex = phoneCursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
 
-                // After N frames, submit the capture request for the JPEG
-                backgroundHandler.postDelayed({
-                    val captureRequestBuilder =
-                        cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-                    captureRequestBuilder?.addTarget(imageReader.surface)
+                                if (numberIndex != -1) {
+                                    // Retrieve the contact phone number from the phoneCursor
+                                    val contactNumber = phoneCursor.getString(numberIndex)
 
-                    // Enable flash
-                    captureRequestBuilder?.set(
-                        CaptureRequest.CONTROL_AE_MODE,
-                        CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH
-                    )
+                                    // Log the retrieved phone number
+                                    Log.d("MainActivity", "Contact Number: $contactNumber")
 
-                    captureRequestBuilder?.build()
-                        ?.let { session.capture(it, captureCallback, backgroundHandler) }
-                }, (NUM_FRAMES_FOR_CONVERGENCE * /*frame duration*/ 33).toLong()) // Adjust the frame duration
-
-            } catch (e: CameraAccessException) {
-                Log.e("CameraCapture", "Error configuring capture session: ${e.message}")
-            }
-        }
-
-        override fun onConfigureFailed(session: CameraCaptureSession) {
-            Log.e("CameraCapture", "Capture session configuration failed")
-        }
-    }
-
-    // Callback for capture results
-    private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
-        override fun onCaptureCompleted(
-            session: CameraCaptureSession,
-            request: CaptureRequest,
-            result: TotalCaptureResult
-        ) {
-            Log.i("CameraCapture", "Image captured successfully")
-
-            cameraDevice?.close()
-            photosTaken++
-
-            if (photosTaken < 2) {
-                takePhotos()
-            }
-        }
-
-        override fun onCaptureFailed(
-            session: CameraCaptureSession,
-            request: CaptureRequest,
-            failure: CaptureFailure
-        ) {
-            Log.e("CameraCapture", "Capture failed: ${failure.reason}")
-        }
-    }
-
-    // Save the captured image to the gallery
-    private fun saveImageToGallery(image: Image) {
-        val timeStamp: String =
-            SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val filename = "IMG_$timeStamp.jpg"
-
-        val contentValues = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
-        }
-
-        val resolver = contentResolver
-        var uri: Uri? = null
-
-        try {
-            uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-
-            uri?.let {
-                resolver.openOutputStream(it)?.use { outputStream ->
-                    val buffer = image.planes[0].buffer
-                    val bytes = ByteArray(buffer.remaining())
-                    buffer.get(bytes)
-                    outputStream.write(bytes)
+                                    // Save the selected contact to SharedPreferences
+                                    saveSelectedContact(contactName, contactNumber)
+                                } else {
+                                    // Handle the case where the phone number index is not found
+                                    Log.d("MainActivity", "Phone number index not found.")
+                                }
+                            } else {
+                                // Handle the case where no phone number is found
+                                Log.d("MainActivity", "No phone number found for the contact.")
+                            }
+                        }
+                    } else {
+                        // Handle the case where the _ID index is not found
+                        Log.d("MainActivity", "_ID index not found.")
+                    }
                 }
             }
-
-            Log.i("SaveImage", "Image saved to gallery")
-        } catch (e: IOException) {
-            Log.e("SaveImage", "Error saving image to gallery: ${e.localizedMessage}")
-        } finally {
-            image.close()
         }
-
-        uri?.let { resolver.notifyChange(it, null) }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        backgroundThread.quitSafely()
-        cameraDevice?.close()
-        imageReader.close()
     }
 }

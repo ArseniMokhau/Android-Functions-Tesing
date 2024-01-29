@@ -6,11 +6,28 @@
     tools:context=".MainActivity">
 
     <Button
-        android:id="@+id/captureButton"
+        android:id="@+id/selectContactButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Capture Photos"
-        android:layout_centerInParent="true"
-        android:padding="16dp" />
+        android:text="Select Contact"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="50dp"/>
 
+    <TextView
+        android:id="@+id/selectedContactNameTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:layout_below="@id/selectContactButton"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="20dp"/>
+
+    <TextView
+        android:id="@+id/selectedContactNumberTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:layout_below="@id/selectedContactNameTextView"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="20dp"/>
 </RelativeLayout>
