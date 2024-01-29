@@ -70,7 +70,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Set up ImageReader
-        imageReader = ImageReader.newInstance(1080, 1920, ImageFormat.JPEG, 2)
+        imageReader = ImageReader.newInstance(1920, 1080, ImageFormat.JPEG, 2)
         imageReader.setOnImageAvailableListener({ reader ->
             val image = reader.acquireLatestImage()
             // Process the captured image here
